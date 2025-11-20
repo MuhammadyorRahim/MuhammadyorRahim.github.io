@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tail Index Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Note: External CDN libraries may be blocked. For local testing, download these files locally -->
+    <script>
+        // Simple CSV parser to replace PapaParse for basic functionality
+        const Papa = {
+            parse: function(file, options) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const csv = e.target.result;
+                        const lines = csv.split('\n');
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        const data = [];
+                        
+                        for (let i = 1; i < lines.length; i++) {
+                            if (lines[i].trim()) {
+                                const values = lines[i].split(',');
+                                const row = {};
+                                headers.forEach((header, index) => {
+                                    row[header] = values[index] ? values[index].trim() : '';
+                                });
+                                data.push(row);
+                            }
+                        }
+                        
+                        options.complete({ data: data });
+                    } catch (error) {
+                        options.error(error);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+        
+        // Simple Chart.js replacement for basic plotting
+        class Chart {
+            constructor(ctx, config) {
+                this.ctx = ctx;
+                this.config = config;
+                this.canvas = ctx.canvas;
+                this.createChart();
+            }
+            
+            createChart() {
+                const { data, options } = this.config;
+                const canvas = this.canvas;
+                const ctx = this.ctx;
+                
+                // Set canvas size
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = 400;
+                
+                // Simple line chart implementation
+                this.drawChart(ctx, data, options);
+            }
+            
+            drawChart(ctx, data, options) {
+                const canvas = ctx.canvas;
+                const width = canvas.width;
+                const height = canvas.height;
+                const padding = 60;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+                
+                // Get data values
+                const labels = data.labels;
+                const datasets = data.datasets;
+                
+                if (!labels || !datasets || datasets.length === 0) return;
+                
+                // Calculate scales
+                const allValues = datasets.flatMap(d => d.data).filter(v => v !== null && v !== undefined);
+                const minY = Math.min(...allValues);
+                const maxY = Math.max(...allValues);
+                const rangeY = maxY - minY || 1;
+                
+                const minX = 0;
+                const maxX = labels.length - 1;
+                
+                // Draw axes
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 1;
+                
+                // Y-axis
+                ctx.beginPath();
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, height - padding);
+                ctx.stroke();
+                
+                // X-axis
+                ctx.beginPath();
+                ctx.moveTo(padding, height - padding);
+                ctx.lineTo(width - padding, height - padding);
+                ctx.stroke();
+                
+                // Draw grid lines and labels
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '12px sans-serif';
+                
+                // Y-axis labels
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding + (height - 2 * padding) * i / 5;
+                    const value = maxY - (maxY - minY) * i / 5;
+                    ctx.fillText(value.toFixed(2), 5, y + 3);
+                    
+                    if (i > 0 && i < 5) {
+                        ctx.strokeStyle = '#f3f4f6';
+                        ctx.beginPath();
+                        ctx.moveTo(padding, y);
+                        ctx.lineTo(width - padding, y);
+                        ctx.stroke();
+                    }
+                }
+                
+                // X-axis labels (sample every few points for readability)
+                const step = Math.max(1, Math.floor(labels.length / 10));
+                for (let i = 0; i < labels.length; i += step) {
+                    const x = padding + (width - 2 * padding) * i / (labels.length - 1);
+                    ctx.fillText(labels[i], x - 15, height - padding + 20);
+                }
+                
+                // Draw datasets
+                datasets.forEach((dataset, datasetIndex) => {
+                    ctx.strokeStyle = dataset.borderColor || '#2563eb';
+                    ctx.lineWidth = 2;
+                    
+                    if (dataset.borderDash) {
+                        ctx.setLineDash(dataset.borderDash);
+                    } else {
+                        ctx.setLineDash([]);
+                    }
+                    
+                    ctx.beginPath();
+                    let hasStarted = false;
+                    
+                    dataset.data.forEach((value, index) => {
+                        if (value !== null && value !== undefined) {
+                            const x = padding + (width - 2 * padding) * index / (labels.length - 1);
+                            const y = padding + (height - 2 * padding) * (maxY - value) / rangeY;
+                            
+                            if (!hasStarted) {
+                                ctx.moveTo(x, y);
+                                hasStarted = true;
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                        }
+                    });
+                    
+                    ctx.stroke();
+                });
+                
+                // Draw title
+                if (options.plugins && options.plugins.title && options.plugins.title.display) {
+                    ctx.fillStyle = '#1f2937';
+                    ctx.font = 'bold 16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(options.plugins.title.text, width / 2, 30);
+                }
+                
+                // Draw axis labels
+                if (options.scales) {
+                    ctx.fillStyle = '#374151';
+                    ctx.font = '14px sans-serif';
+                    ctx.textAlign = 'center';
+                    
+                    if (options.scales.x && options.scales.x.title) {
+                        ctx.fillText(options.scales.x.title.text, width / 2, height - 10);
+                    }
+                    
+                    if (options.scales.y && options.scales.y.title) {
+                        ctx.save();
+                        ctx.translate(20, height / 2);
+                        ctx.rotate(-Math.PI / 2);
+                        ctx.fillText(options.scales.y.title.text, 0, 0);
+                        ctx.restore();
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tail Index Calculator</h1>
+            <p>Calculate tail indexes using Hill Estimator and OLS Log-Log Rank-Size Regression methods</p>
+        </header>
+
+        <!-- Step 1: File Upload -->
+        <div id="step1" class="step active">
+            <div class="card">
+                <h2>Step 1: Upload Data File</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p>Drag and drop your CSV file here or click to browse</p>
+                    <input type="file" id="fileInput" accept=".csv" hidden>
+                    <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        Choose File
+                    </button>
+                </div>
+                <div id="fileInfo" class="file-info hidden">
+                    <p><strong>File:</strong> <span id="fileName"></span></p>
+                    <p><strong>Size:</strong> <span id="fileSize"></span></p>
+                    <button class="btn btn-success" onclick="nextStep()">Continue</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Configuration -->
+        <div id="step2" class="step hidden">
+            <div class="card">
+                <h2>Step 2: Configure Analysis</h2>
+                
+                <div class="config-section">
+                    <h3>Select Columns to Analyze</h3>
+                    <div id="columnSelection" class="column-grid">
+                        <!-- Columns will be populated dynamically -->
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>Select Methods</h3>
+                    <div class="method-selection">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="methodHill" checked>
+                            <span class="checkmark"></span>
+                            Hill Estimator Method
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="methodRS" checked>
+                            <span class="checkmark"></span>
+                            OLS Log-Log Rank-Size Regression Method
+                        </label>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h3>Analysis Options</h3>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="generateGraphics" checked>
+                        <span class="checkmark"></span>
+                        Generate Graphics
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="progressiveAnalysis" checked>
+                        <span class="checkmark"></span>
+                        Progressive Analysis (Method 3)
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="truncationAnalysis" checked>
+                        <span class="checkmark"></span>
+                        Truncation Level Analysis (Method 4)
+                    </label>
+                </div>
+
+                <div class="config-section">
+                    <h3>Truncation Levels (%)</h3>
+                    <div class="truncation-inputs">
+                        <label>
+                            <input type="number" id="truncation1" value="5" min="1" max="50">
+                            %
+                        </label>
+                        <label>
+                            <input type="number" id="truncation2" value="10" min="1" max="50">
+                            %
+                        </label>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+                    <button class="btn btn-primary" id="startCalculation" onclick="startCalculation()">
+                        Start Calculation
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Results -->
+        <div id="step3" class="step hidden">
+            <div class="card">
+                <h2>Calculation Results</h2>
+                
+                <div class="loading" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <p>Calculating tail indexes...</p>
+                </div>
+
+                <div id="results" class="hidden">
+                    <!-- Basic Results Table -->
+                    <div class="results-section">
+                        <h3>Basic Tail Index Results</h3>
+                        <div class="table-container">
+                            <table id="basicResultsTable" class="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th>Method</th>
+                                        <th>Tail Index</th>
+                                        <th>Standard Error</th>
+                                        <th>95% CI Lower</th>
+                                        <th>95% CI Upper</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Truncation Analysis Results -->
+                    <div class="results-section" id="truncationResultsSection">
+                        <h3>Truncation Level Analysis Results</h3>
+                        <div class="table-container">
+                            <table id="truncationResultsTable" class="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Column</th>
+                                        <th>N (Total)</th>
+                                        <th>Truncation %</th>
+                                        <th>n (Used)</th>
+                                        <th>RS Tail Index</th>
+                                        <th>RS Std Error</th>
+                                        <th>RS 95% CI</th>
+                                        <th>Hill Tail Index</th>
+                                        <th>Hill Std Error</th>
+                                        <th>Hill 95% CI</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="results-section" id="chartsSection">
+                        <h3>Progressive Analysis Charts</h3>
+                        <div id="chartsContainer"></div>
+                    </div>
+
+                    <!-- Download Section -->
+                    <div class="results-section">
+                        <h3>Download Results</h3>
+                        <div class="download-buttons">
+                            <button class="btn btn-primary" onclick="downloadResults()">
+                                Download Results (CSV)
+                            </button>
+                            <button class="btn btn-primary" onclick="downloadCharts()">
+                                Download Charts (PNG)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="resetCalculator()">
+                            Start New Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="calculator.js"></script>
+</body>
+</html>
